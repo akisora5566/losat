@@ -1,0 +1,35 @@
+Successfully read in circuit:
+	4 PIs.
+	1 POs.
+	3 Dffs.
+	19 total number of gates
+	8 levels in the circuit.
+vec #0 (total 0 gates/0 PO/0 FF toggled) (0 PO/0 FF toggled)
+INPUT: 0000
+OUTPUT: X
+PRESENT STATE: XXX
+vec #1 (total 0 gates/0 PO/0 FF toggled) (0 PO/0 FF toggled)
+INPUT: 0010
+OUTPUT: X
+PRESENT STATE: 0XX
+vec #2 (total 0 gates/0 PO/0 FF toggled) (0 PO/0 FF toggled)
+INPUT: 0110
+OUTPUT: X
+PRESENT STATE: 0X0
+vec #3 (total 0 gates/0 PO/0 FF toggled) (0 PO/0 FF toggled)
+INPUT: 0111
+OUTPUT: X
+PRESENT STATE: 0X0
+vec #4 (total 2 gates/0 PO/0 FF toggled) (0 PO/0 FF toggled)
+INPUT: 1010
+OUTPUT: 1
+PRESENT STATE: 0X0
+vec #5 (total 5 gates/0 PO/0 FF toggled) (0 PO/1 FF toggled)
+INPUT: 1101
+OUTPUT: 1
+PRESENT STATE: 100
+vec #6 (total 6 gates/0 PO/0 FF toggled) (0 PO/1 FF toggled)
+INPUT: 1111
+OUTPUT: 1
+PRESENT STATE: 101
+FINAL Next State: 100
