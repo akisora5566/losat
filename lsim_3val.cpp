@@ -154,6 +154,7 @@ enum
 
 class gateLevelCkt
 {
+private:
     // circuit information
     int numgates;	// total number of gates (faulty included)
     int numFaultFreeGates;	// number of fault free gates
@@ -182,6 +183,10 @@ class gateLevelCkt
                             // id_unknown && (value1,value2)==(10, 01)
                             // to determine different unknown sources
                             // and their complements
+    unsigned int *value1_ffs; // additional value array for FFs
+    unsigned int *value2_ffs; // same rule as value1 and value2
+    int *id_unknown_ffs; // additional id_unknown array for FFs
+
                             
     int id_unknown_max;     // record the max id_unknown throughout the circuit
 
@@ -197,6 +202,8 @@ class gateLevelCkt
     int actLen;		// length of the activation list
     int *actFFList;	// activation list for the FF's
     int actFFLen;	// length of the actFFList
+    int smallest_level; // the smallest level which has unevaluated events
+
 public:
     int numff;		// number of FF's
     unsigned int *RESET_FF1;	// value of reset ffs read from *.initState
@@ -206,20 +213,30 @@ public:
     void setFaninoutMatrix();	// builds the fanin-out map matrix
 
     void applyVector(char *);	// apply input vector
+    void applyFF(); // apply FFs from the last time frame
     void resetIDunknown(); // reset the value of gates to initial state
+    void reset(); // reset the circuit to initial value
 
     // simulator information
     void setupWheel(int, int);
     void insertEvent(int, int);
     int retrieveEvent();
     void goodsim();		// logic sim (no faults inserted)
+    void LogicSim(char** input_vectors, int timeframes); // goodsim the circuit with input vectors
 
     void setTieEvents();	// inject events from tied nodes
 
     void observeOutputs();	// print the fault-free outputs
+    void observeFFs(); // print the newly reached state
     void printGoodSig(ofstream, int);	// print the fault-free outputs to *.sig
+    void printGateValue(int gateN); // print the value of gateN
 
     char *goodState;		// good state (without scan)
+
+    // get value
+    unsigned int* getValue1FFs(); // return the array of value1_ffs
+    unsigned int* getValue2FFs(); // return the array of value2_ffs
+    int* getIDUnknownFFs(); // reutrn the array of id_unknown_ffs
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -231,6 +248,7 @@ int OBSERVE, INIT0;
 int vecNum=0;
 int numTieNodes;
 int TIES[512];
+char* input_vectors[100];
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -251,7 +269,7 @@ int getVector(ifstream &inFile, int vecSize)
 
     vector[0] = toupper(thisChar); //in case input vec would contain 'x'
     if (vector[0] == 'E')
-	return (0);
+	    return (0);
 
     for (i=1; i<vecSize; i++)
     {
@@ -267,22 +285,35 @@ int getVector(ifstream &inFile, int vecSize)
 int logicSimFromFile(ifstream &vecFile, int vecWidth)
 {
     int moreVec;
-
     moreVec = 1;
+    vecNum = 0;
     while (moreVec)
     {
         moreVec = getVector(vecFile, vecWidth);
         if (moreVec == 1)
         {
-            //buggy statement here!!
-            circuit->resetIDunknown();  // reset value before simulation
-            cout << "vector #" << vecNum << ": " << vector << "\n";
-            circuit->applyVector(vector);
-            circuit->goodsim();      // simulate the vector
-            if (OBSERVE) circuit->observeOutputs();
-                vecNum++;
-        } // if (moreVec == 1)
-    } // while (getVector...)
+            input_vectors[vecNum] = new char[vecWidth];
+            for (int j = 0; j < vecWidth; j++)
+            {
+                input_vectors[vecNum][j] = vector[j];
+            }
+            cout << "vector #" << vecNum << ": " << input_vectors[vecNum] << "\n";
+            vecNum++;
+        }
+    }
+
+    char** input_vectors_truesize;
+    input_vectors_truesize = new char* [vecNum];
+    cout << "vecNum = " << vecNum << endl;
+    for (int i = 0; i < vecNum; i++)
+    {
+        input_vectors_truesize[i] = new char[vecWidth];
+        for (int j = 0; j < vecWidth; j++)
+        {
+            input_vectors_truesize[i][j] = input_vectors[i][j];
+        }
+    }
+    circuit->LogicSim(input_vectors_truesize, vecNum);
 
     return (vecNum);
 }
@@ -360,6 +391,10 @@ int main(int argc, char *argv[])
 
     circuit->setTieEvents();
     totalNumVec = logicSimFromFile(vecFile, vecWidth);
+    if (OBSERVE == 1)
+    {
+        circuit->observeOutputs();
+    }
     vecFile.close();
 
     // output results
@@ -375,6 +410,10 @@ inline void gateLevelCkt::insertEvent(int levelN, int gateN)
 {
     levelEvents[levelN][levelLen[levelN]] = gateN;
     levelLen[levelN]++;
+    if (levelN < smallest_level)
+    {
+        smallest_level = levelN;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -420,7 +459,11 @@ gateLevelCkt::gateLevelCkt(string cktName)
     value1 = new unsigned int[count+64];
     value2 = new unsigned int[count+64];
     id_unknown = new int[count+64];
+    value1_ffs = new unsigned int[count+64];
+    value2_ffs = new unsigned int[count+64];
+    id_unknown_ffs = new int[count+64];
     id_unknown_max = 0;
+    smallest_level = 0;
 
     // now read in the circuit
     numTieNodes = 0;
@@ -534,6 +577,7 @@ gateLevelCkt::gateLevelCkt(string cktName)
             value1[netnum] = 0;
             value2[netnum] = ALLONES;
             id_unknown[netnum] = 0;
+            id_unknown_ffs[netnum] = 0;
         }
     
         // read in and discard the observability values
@@ -546,6 +590,14 @@ gateLevelCkt::gateLevelCkt(string cktName)
     yyin.close();
     numgates++;
     numFaultFreeGates = numgates;
+
+    // initializing stored ff values
+    for (i=0; i<numff; i++)
+    {
+        value1_ffs[i] = 0;
+        value2_ffs[i] = ALLONES;
+        id_unknown_ffs[i] = 0;
+    }
 
     // now compute the maximum width of the level
     for (i=0; i<maxlevels; i++)
@@ -621,7 +673,7 @@ gateLevelCkt::gateLevelCkt(string cktName)
 
 ////////////////////////////////////////////////////////////////////////
 // setFaninoutMatrix()
-//	This function builds the matrix of succOfPredOutput and 
+// This function builds the matrix of succOfPredOutput and
 // predOfSuccInput.
 ////////////////////////////////////////////////////////////////////////
 
@@ -763,25 +815,28 @@ void gateLevelCkt::applyVector(char *vec)
     char origBit;
     int successor;
     int i, j;
-    int max_pi_id_unknown = 1;
     
     for (i = 0; i < numpri; i++)
     {
         origVal1 = value1[inputs[i]] & 1;
         origVal2 = value2[inputs[i]] & 1;
-        if (id_unknown[inputs[i]] == 0)
+        if (id_unknown[inputs[i]] == 0) //is 1/0 or the initial unknown
         {
             if ((origVal1 == 1) && (origVal2 == 1))
                 origBit = '1';
             else if ((origVal1 == 0) && (origVal2 == 0))
                 origBit = '0';
+            else
+                origBit = 'X'; // the initial unknown
         }
         else
+        {
             origBit = 'X';
-        
+        }
+
         // if new input is X, we must reapply
-        // else if new input is 0 or 1, we reapply only if it changed   
-        if ((vec[i] != 'X') || (origBit != vec[i]))
+        // or if new input is 0 or 1, we reapply only if it changed
+        if ((vec[i] == 'X') || (origBit != vec[i]))
         {
             switch (vec[i])
             {
@@ -802,11 +857,10 @@ void gateLevelCkt::applyVector(char *vec)
             case 'X':
                     value1[inputs[i]] = 0;
                     value2[inputs[i]] = ALLONES;
-                    id_unknown[inputs[i]] = max_pi_id_unknown;
-                    max_pi_id_unknown++;
+                    id_unknown[inputs[i]] = id_unknown_max;
                     id_unknown_max++;
                     //debuging cout
-                    //cout << "vec[" << i << "] = " << vec[i] << ", id = " << id_unknown[inputs[i]] << endl;
+                    cout << "vec[" << i << "] = " << vec[i] << ", id = " << id_unknown[inputs[i]] << endl;
                     break;
             default:
                     cerr << vec[i] << ": error in the input vector.\n";
@@ -828,8 +882,63 @@ void gateLevelCkt::applyVector(char *vec)
 }
 
 ////////////////////////////////////////////////////////////////////////
+// applyFF()
+// Apply FFs from the last time frame
+////////////////////////////////////////////////////////////////////////
+
+void gateLevelCkt::applyFF()
+{
+    unsigned int original_value1, original_value2;
+    int original_id_unknown;
+    int current_ff = 0;
+    int successor = 0;
+    /****you already have the ff_list and Map****/
+    for (int i = 0; i < numff; i++)
+    {
+        original_value1 = value1_ffs[i];
+        original_value2 = value2_ffs[i];
+        original_id_unknown = id_unknown_ffs[i];
+
+        // if not equal to reset value
+        if (original_value1 || !original_value2 || original_id_unknown)
+        {
+            // set value of ffs
+            current_ff = ff_list[i];
+            value1[current_ff] = value1_ffs[i];
+            value2[current_ff] = value2_ffs[i];
+            id_unknown[current_ff] = id_unknown_ffs[i];
+            //debuging cout
+            /*
+            char char_val1 = value1[current_ff] ? '1':'0';
+            char char_val2 = value2[current_ff] ? '1':'0';
+            cout << "ff[" << i << "] = " << char_val1 << " " << char_val2 << ", id = " << id_unknown[current_ff] << endl;
+            */
+
+            //put sucessors on the event wheel
+            for (int j = 0; j < fanout[current_ff]; j++)
+            {
+                successor = fnlist[current_ff][j];
+                if (sched[successor] == 0)
+                {
+                    insertEvent(levelNum[successor], successor);
+                    sched[successor] = 1;
+                }
+            }
+        }
+        //dubuging cout
+        /*
+        else
+        {
+            cout << "ff[" << i << "] has no new value." << endl;
+        }
+        */
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////
 // resetIDunknown()
-//	This function reset the value of gates to initial state
+//This function reset the id_unknowns to initial state
 ////////////////////////////////////////////////////////////////////////
 
 void gateLevelCkt::resetIDunknown()
@@ -837,7 +946,33 @@ void gateLevelCkt::resetIDunknown()
     for (int i = 0; i < numgates; i++)
     {
         id_unknown[i] = 0;
-        id_unknown_max = 0;
+    }
+    id_unknown_max = 0;
+}
+
+
+////////////////////////////////////////////////////////////////////////
+// reset()
+//This function reset the value of all gates to initial state
+////////////////////////////////////////////////////////////////////////
+
+void gateLevelCkt::reset()
+{
+    // reset gate values
+    id_unknown_max = 0;
+    for (int i = 0; i < numgates; i++)
+    {
+        value1[i] = 0;
+        value2[i] = ALLONES;
+        id_unknown[i] = 0;
+    }
+
+    // reset stored ff values
+    for (int i = 0; i < numff; i++)
+    {
+        value1_ffs[i] = 0;
+        value2_ffs[i] = ALLONES;
+        id_unknown_ffs = 0;
     }
 }
 
@@ -865,12 +1000,17 @@ void gateLevelCkt::setupWheel(int numLevels, int levelSize)
 ////////////////////////////////////////////////////////////////////////
 int gateLevelCkt::retrieveEvent()
 {
-    while ((levelLen[currLevel] == 0) && (currLevel < maxlevels))
-	currLevel++;
 
+    while ((levelLen[smallest_level] == 0) && (smallest_level < maxlevels))
+        smallest_level++;
+
+    currLevel = smallest_level;
     if (currLevel < maxlevels)
     {
     	levelLen[currLevel]--;
+        while ((levelLen[smallest_level] == 0) && (smallest_level < maxlevels))
+            smallest_level++;
+        //cout << "now smallest_level: " << smallest_level << endl;
         return(levelEvents[currLevel][levelLen[currLevel]]);
     }
     else
@@ -888,16 +1028,18 @@ void gateLevelCkt::goodsim()
     int gateN; 
     int predecessor, successor; // the gateN of pred and succ
     int predecessor2; // to reference another predecessor if required
+    int ff_number; // to distinguish ff1, ff2, ff3 ...
     bool evaluated = false; // a flag to record if output of this gate is evaluated
     int id_temp = 0; // temp id_unknown
     int *predList;
     int i, j; // for loops
     unsigned int val1, val2, tmpVal;
     int fanin_count; // the fanin count of current gate
+    int activated_ff_count = 0;
 
     currLevel = 0;
     actLen = actFFLen = 0;
-    while (currLevel < maxlevels)
+    while (currLevel < maxlevels || activated_ff_count)
     {
         gateN = retrieveEvent();
         fanin_count = fanin[gateN];
@@ -910,6 +1052,9 @@ void gateLevelCkt::goodsim()
             int xi_count = 0;              //num of xs in predecessors' output
             int xi_bar_count = 0;          //num of xs_bar in predecessors' output
             int one_of_the_id_unknown = 0; //of predecessors
+            bool has_unknown = 0;
+            bool has_real_unknown = 0;
+            bool has_controlling = 0;
             switch (gtype[gateN])
             {
             case T_and:
@@ -948,9 +1093,29 @@ void gateLevelCkt::goodsim()
                             }
                         }
                     }
+                    if (value1[predecessor] != value2[predecessor])
+                    {
+                        has_unknown = 1;
+                    }
+                    if (id_unknown[predecessor] != 0)
+                    {
+                        has_real_unknown = 1;
+                    }
+                    if (value1[predecessor] && value1[predecessor])
+                    {
+                        has_controlling = 1;
+                    }
                 }
                 if (evaluated)
                     break;
+                else if (has_unknown && !has_real_unknown && !has_controlling)
+                {
+                    // new X with max id
+                    val1 = 0;
+                    val2 = ALLONES;
+                    id_unknown_max++;
+                    id_temp = id_unknown_max;
+                }
                 else
                 // could be:
                 // a) no unknown => output = 0 or 1
@@ -1019,9 +1184,29 @@ void gateLevelCkt::goodsim()
                             }
                         }
                     }
+                    if (value1[predecessor] != value2[predecessor])
+                    {
+                        has_unknown = 1;
+                    }
+                    if (id_unknown[predecessor] != 0)
+                    {
+                        has_real_unknown = 1;
+                    }
+                    if (value1[predecessor] && value1[predecessor])
+                    {
+                        has_controlling = 1;
+                    }
                 }
                 if (evaluated)
                     break;
+                else if (has_unknown && !has_real_unknown && !has_controlling)
+                {
+                    // new X with max id
+                    val1 = 0;
+                    val2 = ALLONES;
+                    id_unknown_max++;
+                    id_temp = id_unknown_max;
+                }
                 else
                 // a) no unknown => output = 0 or 1
                 // b) all unknowns have the same id, no complements => output = 1 or u
@@ -1083,9 +1268,29 @@ void gateLevelCkt::goodsim()
                             }
                         }
                     }
+                    if (value1[predecessor] != value2[predecessor])
+                    {
+                        has_unknown = 1;
+                    }
+                    if (id_unknown[predecessor] != 0)
+                    {
+                        has_real_unknown = 1;
+                    }
+                    if (value1[predecessor] && value1[predecessor])
+                    {
+                        has_controlling = 1;
+                    }
                 }
                 if (evaluated)
                     break;
+                else if (has_unknown && !has_real_unknown && !has_controlling)
+                {
+                    // new X with max id
+                    val1 = 0;
+                    val2 = ALLONES;
+                    id_unknown_max++;
+                    id_temp = id_unknown_max;
+                }
                 else
                 // a) no unknown => output = 0 or 1
                 // b) all unknowns have the same id, no complements => output = 1 or u
@@ -1110,9 +1315,10 @@ void gateLevelCkt::goodsim()
                 // 2) have different id => generate a new unknown
                 for (i = 0; i < fanin_count; i++)
                 {
+                    predecessor = inlist[gateN][i];
+                    printGateValue(predecessor);
                     for (j = i+1; j < fanin_count; j++)
                     {
-                        predecessor = inlist[gateN][i];
                         predecessor2 = inlist[gateN][j];
                         if ((id_unknown[predecessor] != 0) && (id_unknown[predecessor2] !=0))
                         {
@@ -1139,9 +1345,29 @@ void gateLevelCkt::goodsim()
                             }
                         }
                     }
+                    if (value1[predecessor] != value2[predecessor])
+                    {
+                        has_unknown = 1;
+                    }
+                    if (id_unknown[predecessor] != 0)
+                    {
+                        has_real_unknown = 1;
+                    }
+                    if (value1[predecessor] && value1[predecessor])
+                    {
+                        has_controlling = 1;
+                    }
                 }
                 if (evaluated)
                     break;
+                else if (has_unknown && !has_real_unknown && !has_controlling)
+                {
+                    // new X with max id
+                    val1 = 0;
+                    val2 = ALLONES;
+                    id_unknown_max++;
+                    id_temp = id_unknown_max;
+                }
                 else
                 // a) no unknown => output = 0 or 1
                 // b) all unknowns have the same id, no complements => output = 0 or u
@@ -1181,13 +1407,64 @@ void gateLevelCkt::goodsim()
                 break;
             case T_dff:
                 predecessor = inlist[gateN][0];
-                val1 = value1[predecessor];
-                val2 = value2[predecessor];
-                id_temp = id_unknown[predecessor];
+                ff_number = ffMap[gateN]; //ff1, ff2, or ff3? ...
+                val1 = value1[gateN];
+                val2 = value2[gateN];
+                id_temp = id_unknown[gateN];
+                value1_ffs[ff_number] = value1[predecessor];
+                value2_ffs[ff_number] = value2[predecessor];
+                id_unknown_ffs[ff_number] = id_unknown[predecessor];
+                activated_ff_count--;
+
+                //debug
+                // output values
+                /*
+                if (id_temp == 0)
+                {
+                    if (val1 && val2)
+                    {
+                        cout << "ff[" << ff_number << "] output 1" << endl;
+                    }
+                    else if (!val1 && !val2)
+                    {
+                        cout << "ff[" << ff_number << "] output 0" << endl;
+                    }
+                    else
+                    {
+                        cout << "ff[" << ff_number << "] output initial unknown" << endl;
+                    }
+                }
+                else
+                {
+                    cout << "ff[" << ff_number << "] output unknown, id " << id_temp << endl;
+                }
+                // stored values
+                if (id_unknown_ffs[ff_number] == 0)
+                {
+                    if (value1_ffs[ff_number] && value2_ffs[ff_number])
+                    {
+                        cout << "ff[" << ff_number << "] stored 1" << endl;
+                    }
+                    else if (!value1_ffs[ff_number] && !value2_ffs[ff_number])
+                    {
+                        cout << "ff[" << ff_number << "] stored 0" << endl;
+                    }
+                    else
+                    {
+                        cout << "ff[" << ff_number << "] stored initial unknown" << endl;
+                    }
+                }
+                else
+                {
+                    cout << "ff[" << ff_number << "] stored unknown, id " << id_unknown_ffs[ff_number] << endl;
+                }
+                */
+
+                // This part was done by Dr. Hsiao
+                // Functionally unknown
                 actFFList[actFFLen] = gateN;
                 actFFLen++;
                 break;
-                
             case T_xor:
                 predList = inlist[gateN];
                 // if two predecessors has different id => generate a new unknown
@@ -1399,7 +1676,9 @@ void gateLevelCkt::goodsim()
             
             //debug
             /*
-            cout << "gate" << gateN << " has output: " << val1 << " & " << val2;
+            char char_val1 = val1 ? '1':'0';
+            char char_val2 = val2 ? '1':'0';
+            cout << "gate" << gateN << " has output: " << char_val1 << " & " << char_val2;
             cout << " id = " << id_temp << endl;
             */
     
@@ -1416,7 +1695,12 @@ void gateLevelCkt::goodsim()
                     sucLevel = levelNum[successor];
                     if (sched[successor] == 0)
                     {
-                        if (sucLevel != 0)
+                        if (gtype[successor] == T_dff)
+                        {
+                            activated_ff_count++;
+                            insertEvent(sucLevel, successor);
+                        }
+                        else if (sucLevel != 0)
                             insertEvent(sucLevel, successor);
                         else	// same level, wrap around for next time
                         {
@@ -1429,12 +1713,16 @@ void gateLevelCkt::goodsim()
             }	// if (val1..)
         }	// if (gateN...)
     }	// while (currLevel...)
-    
+
+
+    /******** old FF handle function by Dr. Hsiao********/
+    /************** temporarily blocked******************/
     // now re-insert the activation list for the FF's
+    /*
     for (i=0; i < actLen; i++)
     {
-	insertEvent(0, activation[i]);
-	sched[activation[i]] = 0;
+	    insertEvent(0, activation[i]);
+	    sched[activation[i]] = 0;
 
         predecessor = inlist[activation[i]][0];
         gateN = ffMap[activation[i]];
@@ -1445,7 +1733,37 @@ void gateLevelCkt::goodsim()
         else
             goodState[gateN] = 'X';
     }
+    */
 }
+
+////////////////////////////////////////////////////////////////////////
+// LogicSim(char** input_vectors)
+// Do the sequential logic simulation with input vectors
+////////////////////////////////////////////////////////////////////////
+void gateLevelCkt::LogicSim(char** input_vectors, int timeframes)
+{
+    //cout << "sizeof(input_vectors) = " << sizeof(input_vectors) << endl;
+    //cout << "sizeof(input_vectors[0]) = " << sizeof(input_vectors[0]) << endl;
+    //int timeframes = sizeof(input_vectors);
+    cout << "timeframes =" << timeframes << endl;
+
+    for (int i = 0; i < timeframes; i++)
+    {
+        cout << "vector for timeframe #" << i << ": " << input_vectors[i] << endl;
+        applyFF();
+        //cout << "applyFF succeeded" << endl;
+        applyVector(input_vectors[i]);
+        //cout << "applyVector succeeded" << endl;
+        goodsim();
+        //cout << "goodsim succeeded" << endl;
+        observeFFs();
+        observeOutputs();
+
+
+    }
+}
+
+
 
 ////////////////////////////////////////////////////////////////////////
 // observeOutputs()
@@ -1456,7 +1774,7 @@ void gateLevelCkt::observeOutputs()
 {
     int i;
 
-    cout << "\t";
+    cout << "Outs:\t";
     for (i=0; i<numout; i++)
     {
 	if (value1[outputs[i]] && value2[outputs[i]])
@@ -1466,18 +1784,57 @@ void gateLevelCkt::observeOutputs()
 	else
 	    cout << "X";
     }
-
-    cout << "\n";
-    for (i=0; i<numff; i++)
-    {
-	if (value1[ff_list[i]] && value2[ff_list[i]])
-	    cout << "1";
-	else if ((value1[ff_list[i]] == 0) && (value2[ff_list[i]] == 0))
-	    cout << "0";
-	else
-	    cout << "X";
-    }
-
-    cout << "\n";
+    cout << endl;
 }
 
+void gateLevelCkt::observeFFs()
+{
+    int i;
+    cout << "FFs:\t";
+    for (i=0; i<numff; i++)
+    {
+        if (value1_ffs[i] && value2_ffs[i])
+            cout << "1";
+        else if (!value1_ffs[i] && !value2_ffs[i])
+            cout << "0";
+        else
+            cout << "X";
+    }
+    cout << endl;
+
+}
+
+void gateLevelCkt::printGateValue(int gateN)
+{
+    unsigned int val1 = value1[gateN];
+    unsigned int val2 = value2[gateN];
+    int id = id_unknown[gateN];
+
+    if (val1 && val2)
+    {
+        cout << "gate[" << gateN << "] output 1, id = " << id << endl;
+    }
+    else if (!val1 && !val2)
+    {
+        cout << "gate[" << gateN << "] output 0, id = " << id << endl;
+    }
+    else
+    {
+        cout << "gate[" << gateN << "] output unknown, id = " << id << endl;
+    }
+
+}
+
+unsigned int* gateLevelCkt::getValue1FFs()
+{
+    return value1_ffs;
+}
+
+unsigned int* gateLevelCkt::getValue2FFs()
+{
+    return value2_ffs;
+}
+
+int* gateLevelCkt::getIDUnknownFFs(){
+    return id_unknown_ffs;
+}
