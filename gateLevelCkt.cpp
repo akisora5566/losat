@@ -4,6 +4,7 @@
 #include <fstream>
 #include <string>
 #include <ctime>
+#include <cmath>
 #include "gateLevelCkt.h"
 using namespace std;
 
@@ -63,9 +64,6 @@ gateLevelCkt::gateLevelCkt(string cktName, int INIT0)
     value1 = new unsigned int[count+64];
     value2 = new unsigned int[count+64];
     id_unknown = new int[count+64];
-    value1_ffs = new unsigned int[count+64];
-    value2_ffs = new unsigned int[count+64];
-    id_unknown_ffs = new int[count+64];
     id_unknown_max = 0;
     smallest_level = 0;
 
@@ -181,7 +179,6 @@ gateLevelCkt::gateLevelCkt(string cktName, int INIT0)
             value1[netnum] = 0;
             value2[netnum] = ALLONES;
             id_unknown[netnum] = 0;
-            id_unknown_ffs[netnum] = 0;
         }
     
         // read in and discard the observability values
@@ -195,7 +192,16 @@ gateLevelCkt::gateLevelCkt(string cktName, int INIT0)
     numgates++;
     numFaultFreeGates = numgates;
 
+    // initialize reset signal masking related variables
+    reset_power0 = new int[numpri];
+    reset_power1 = new int[numpri];
+    prob_maskto0 = new double[numpri];
+    prob_maskto1 = new double[numpri];
+
     // initializing stored ff values
+    value1_ffs = new unsigned int[count+64];
+    value2_ffs = new unsigned int[count+64];
+    id_unknown_ffs = new int[count+64];
     for (i=0; i<numff; i++)
     {
         value1_ffs[i] = 0;
@@ -241,39 +247,116 @@ gateLevelCkt::gateLevelCkt(string cktName, int INIT0)
 
     if (INIT0)	// if start from a initial state
     {
-	RESET_FF1 = new unsigned int [numff+2];
-	RESET_FF2 = new unsigned int [numff+2];
+        RESET_FF1 = new unsigned int [numff+2];
+        RESET_FF2 = new unsigned int [numff+2];
 
-	fName = cktName + ".initState";
-	yyin.open(fName.c_str(), ios::in);
-	if (!yyin)
-	{	cerr << "Can't open " << fName << "\n";
-		exit(-1);}
+        fName = cktName + ".initState";
+        yyin.open(fName.c_str(), ios::in);
+        if (!yyin)
+        {	cerr << "Can't open " << fName << "\n";
+        	exit(-1);}
 
-	for (i=0; i<numff; i++)
-	{
-	    yyin >>  c;
+        for (i=0; i<numff; i++)
+        {
+            yyin >>  c;
 
-	    if (c == '0')
-	    {
-		RESET_FF1[i] = 0;
-		RESET_FF2[i] = 0;
-	    }
-	    else if (c == '1')
-	    {
-		RESET_FF1[i] = ALLONES;
-		RESET_FF2[i] = ALLONES;
-	    }
-	    else 
-	    {
-		RESET_FF1[i] = 0;
-		RESET_FF2[i] = ALLONES;
-	    }
-	}
+            if (c == '0')
+            {
+        	RESET_FF1[i] = 0;
+        	RESET_FF2[i] = 0;
+            }
+            else if (c == '1')
+            {
+        	RESET_FF1[i] = ALLONES;
+        	RESET_FF2[i] = ALLONES;
+            }
+            else
+            {
+        	RESET_FF1[i] = 0;
+        	RESET_FF2[i] = ALLONES;
+            }
+        }
 
-	yyin.close();
+        yyin.close();
+    }
+
+    // calculate reset signal masking related values
+    FindResetInputs();
+}
+
+////////////////////////////////////////////////////////////////////////
+////********************** PRIVATE FUNCTIONS ***********************////
+////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////
+// FindResetInputs()
+// Calculate reset signal masking related values
+////////////////////////////////////////////////////////////////////////
+void gateLevelCkt::FindResetInputs()
+{
+    char* input_vector;
+    input_vector = new char[numpri];
+    for(int i = 0; i < numpri; i++)
+    {
+        input_vector[i] = 'X';
+    }
+    for(int i = 0; i < numpri; i++)
+    {
+        // calculate reset_power0
+        input_vector[i] = '0';
+        applyVector(input_vector);
+        goodsim();
+        int reset_ff_count = 0;
+        for (int j = 0; j < numff; j++)
+        {
+            if ((value1_ffs[j] && value2_ffs[j])       // normal 1
+                || (!value1_ffs[j] && !value2_ffs[j])) // normal 0
+            {
+                reset_ff_count++;
+            }
+        }
+        reset_power0[i] = reset_ff_count;
+        reset_ff_count = 0;
+        reset(); // reset the circuit to initial state
+
+
+        //calculate reset_power1
+        input_vector[i] = '1';
+        applyVector(input_vector);
+        goodsim();
+        for (int j = 0; j < numff; j++)
+        {
+            if ((value1_ffs[j] && value2_ffs[j])       // normal 1
+                || (!value1_ffs[j] && !value2_ffs[j])) // normal 0
+            {
+                reset_ff_count++;
+            }
+        }
+        reset_power1[i] = reset_ff_count;
+
+        input_vector[i] = 'X';
+        reset();
+
+        prob_maskto0[i] = reset_power1[i] / (double)numff;
+        prob_maskto1[i] = reset_power0[i] / (double)numff;
+        prob_maskto0[i] = sqrt(prob_maskto0[i]);
+        prob_maskto1[i] = sqrt(prob_maskto1[i]);
+
+        //debug cout
+        /*
+        cout << "reset_power0[" << i << "] = " << reset_power0[i] << endl;
+        cout << "reset_power1[" << i << "] = " << reset_power1[i] << endl;
+        cout << "prob_maskto0[" << i << "] = " << prob_maskto0[i] << endl;
+        cout << "prob_maskto1[" << i << "] = " << prob_maskto1[i] << endl;
+        */
     }
 }
+
+
+
+////////////////////////////////////////////////////////////////////////
+////********************** PUBLIC FUNCTIONS ************************////
+////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////
 // setFaninoutMatrix()
@@ -461,10 +544,10 @@ void gateLevelCkt::applyVector(char *vec)
             case 'X':
                     value1[inputs[i]] = 0;
                     value2[inputs[i]] = ALLONES;
-                    id_unknown[inputs[i]] = id_unknown_max;
                     id_unknown_max++;
+                    id_unknown[inputs[i]] = id_unknown_max;
                     //debuging cout
-                    cout << "vec[" << i << "] = " << vec[i] << ", id = " << id_unknown[inputs[i]] << endl;
+                    //cout << "vec[" << i << "] = " << vec[i] << ", id = " << id_unknown[inputs[i]] << endl;
                     break;
             default:
                     cerr << vec[i] << ": error in the input vector.\n";
@@ -576,7 +659,7 @@ void gateLevelCkt::reset()
     {
         value1_ffs[i] = 0;
         value2_ffs[i] = ALLONES;
-        id_unknown_ffs = 0;
+        id_unknown_ffs[i] = 0;
     }
 }
 
@@ -920,7 +1003,7 @@ void gateLevelCkt::goodsim()
                 for (i = 0; i < fanin_count; i++)
                 {
                     predecessor = inlist[gateN][i];
-                    printGateValue(predecessor);
+                    //printGateValue(predecessor);
                     for (j = i+1; j < fanin_count; j++)
                     {
                         predecessor2 = inlist[gateN][j];
@@ -1391,6 +1474,12 @@ void gateLevelCkt::observeOutputs()
     cout << endl;
 }
 
+
+////////////////////////////////////////////////////////////////////////
+// observeFFs()
+// prints the stored value of FFs
+////////////////////////////////////////////////////////////////////////
+
 void gateLevelCkt::observeFFs()
 {
     int i;
@@ -1407,6 +1496,12 @@ void gateLevelCkt::observeFFs()
     cout << endl;
 
 }
+
+
+////////////////////////////////////////////////////////////////////////
+// printGateValue
+// prints the value of every gates with 0,1,X and id
+////////////////////////////////////////////////////////////////////////
 
 void gateLevelCkt::printGateValue(int gateN)
 {
@@ -1429,6 +1524,12 @@ void gateLevelCkt::printGateValue(int gateN)
 
 }
 
+
+////////////////////////////////////////////////////////////////////////
+// getValue1FFs, getValue2FFs, getIDUunknownFFs
+// return all the stored value of FFs
+////////////////////////////////////////////////////////////////////////
+
 unsigned int* gateLevelCkt::getValue1FFs()
 {
     return value1_ffs;
@@ -1442,3 +1543,20 @@ unsigned int* gateLevelCkt::getValue2FFs()
 int* gateLevelCkt::getIDUnknownFFs(){
     return id_unknown_ffs;
 }
+
+
+////////////////////////////////////////////////////////////////////////
+// getPorbMaskto0, getProbMaskto1
+// return the reset signal masking related values
+////////////////////////////////////////////////////////////////////////
+
+double* gateLevelCkt::getProbMaskto0()
+{
+    return prob_maskto0;
+}
+
+double* gateLevelCkt::getProbMaskto1()
+{
+    return prob_maskto1;
+}
+

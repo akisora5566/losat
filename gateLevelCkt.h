@@ -1,6 +1,13 @@
 //
 // Created by akisora5566 on 11/24/18.
 //
+#include <cstdlib>
+#include <sys/times.h>
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <ctime>
+
 #ifndef LOSAT_GATELEVELCKT_H
 #define LOSAT_GATELEVELCKT_H
 
@@ -28,6 +35,7 @@
 #define MAXIO 5000
 #define MAXMODULES 5000
 #define MAXDFF 10560
+
 
 #define GOOD 1
 #define FAULTY 2
@@ -125,6 +133,13 @@ private:
     unsigned int *value2_ffs; // same rule as value1 and value2
     int *id_unknown_ffs; // additional id_unknown array for FFs
 
+    // reset signal masking
+    int* reset_power0;
+    int* reset_power1;
+    double* prob_maskto0;
+    double* prob_maskto1;
+    void FindResetInputs(); // calculate reset signal masking related values
+                            // called by constructor only
 
     int id_unknown_max;     // record the max id_unknown throughout the circuit
 
@@ -175,6 +190,8 @@ public:
     unsigned int* getValue1FFs(); // return the array of value1_ffs
     unsigned int* getValue2FFs(); // return the array of value2_ffs
     int* getIDUnknownFFs(); // reutrn the array of id_unknown_ffs
+    double* getProbMaskto0();
+    double* getProbMaskto1();
 };
 
 #endif //LOSAT_GATELEVELCKT_H
