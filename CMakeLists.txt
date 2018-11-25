@@ -4,4 +4,4 @@ project(losat)
 set(CMAKE_CXX_STANDARD 14)
 
 add_executable(losat
-        lsim_3val.cpp)
+        gateLevelCkt.cpp main.cpp gateLevelCkt.h)
