@@ -89,8 +89,8 @@ std::vector<std::vector<int> > generate_random_test_sequence(int num_inputs, int
     double* probMaskTo1 = circuit->getProbMaskto1();
 	for (int i =0; i < num_vec; i++){
         for (int j=0; j < num_inputs; j++){
-        	//    RESET SIGNAL MASKING
-        	probTo0 = *(probMaskTo0 + j);
+        	//    RESET SIGNAL MASKING////////////////////////////////
+        	/*probTo0 = *(probMaskTo0 + j);
             probTo1 = *(probMaskTo1 + j);
             if(probTo0 > 0.5 || probTo1 > 0.5){
             	if(probTo0 > probTo1){
@@ -110,9 +110,10 @@ std::vector<std::vector<int> > generate_random_test_sequence(int num_inputs, int
 			}	
 			}else{
 				a = rand()%2;
-			}
+			}*/
 			/////////////////////////////////////
-			// a = rand()%2;     //-------------------WITH NO RESET SIGNAL MASKING------------
+			 a = rand()%2;     //-------------------WITH NO RESET SIGNAL MASKING------------
+			 //////////////////////////////////////////////////////////
             temp.push_back(a);
         }
         test_sequence.push_back(temp);
@@ -120,7 +121,6 @@ std::vector<std::vector<int> > generate_random_test_sequence(int num_inputs, int
     }
     return test_sequence;
 }
-
 
 char** generate_test_vector(int num_inputs, int num_vectors){
     char** test_vec;
@@ -135,6 +135,7 @@ char** generate_test_vector(int num_inputs, int num_vectors){
         for (int j = 0; j < num_inputs; j++)
         {
         	//-----------------------RESET SIGNAL MASKING-----------------------
+        	/*
         	probTo0 = *(probMaskTo0 + j);
             probTo1 = *(probMaskTo1 + j);
             if(probTo0 > 0.4 || probTo1 > 0.4){
@@ -156,16 +157,15 @@ char** generate_test_vector(int num_inputs, int num_vectors){
 			}else{
 				a = rand()%2;
 			}
-            
+            */
 			/////////////////////////////////////////////////////////////////////
-            //a = rand()%2;
+            a = rand()%2;
+            /////////////////////////////////////////////////////////////////////
             if(a == 0) test_vec[i][j] = '0'; else if( a ==1) test_vec[i][j] = '1';
         }
     }
     return test_vec;
 }
-
-
 
 std::vector< float> compute_fitness(std::vector< std::vector< std::vector <int> > > curr_population, int num_vectors){
 	std::vector< float> fitness;
@@ -186,7 +186,7 @@ std::vector< float> compute_fitness(std::vector< std::vector< std::vector <int> 
                 if(curr_population[i][elem][elem_i] == 0)  test_vec1[elem][elem_i] = '0'; else if( curr_population[i][elem][elem_i] ==1)test_vec1[elem][elem_i] = '1';
             }
         }
-        
+        circuit->reset();
 		circuit->setTieEvents();
         circuit->LogicSim(test_vec1, num_vectors);
 		value1ffs = circuit->getValue1FFs();
@@ -197,17 +197,17 @@ std::vector< float> compute_fitness(std::vector< std::vector< std::vector <int> 
 		for(int ff=0; ff < num_ff; ff++){
 			if(*value1ffs == *value2ffs){
         		if(*value1ffs == 0){
-        			states.push_back('0');cout <<"0";
+        			states.push_back('0');//cout <<"0";
 				}else{
-        		states.push_back('1');cout <<"1";
+        		states.push_back('1');//cout <<"1";
 				} 
 			}else{
-				states.push_back('X');cout << "X";
+				states.push_back('X');//cout << "X";
 				skip_flag = 1;
 			}
 			value1ffs++; value2ffs++;
         }
-        cout << "\n";
+        //cout << "\n";
         f = 0; 
         if(!skip_flag){
         	for(int j =0; j < states.size(); j++){
@@ -356,6 +356,7 @@ void partition(int num_vectors){
         //start = clock();
         circuit->setTieEvents();
 		//cout << "Logic Sim "<< count <<"\n";
+		circuit->reset();
         circuit->LogicSim(test_vec, num_vectors);
         value1ffs = circuit->getValue1FFs();
         value2ffs = circuit->getValue2FFs();
@@ -576,10 +577,12 @@ int main(int argc, char *argv[])
 	ofstream output ("output.vec");
 	for(int i =0; i < test_seq_population.size(); i++){
 		output << circuit->numpri;
+		output << "\n";
 		for(int j=0; j< test_seq_population[i].size(); j++){
 			for(int k =0; k<test_seq_population[i][j].size(); k++){
 				output << test_seq_population[i][j][k];
 			}
+			output << "\n";
 		}
 		output << "END";
 		output << "\n"; 

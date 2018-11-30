@@ -489,8 +489,9 @@ main(int argc, char *argv[])
 	*/
 	SCANID = 1;
 	
+	circuit = new gateLevelCkt(cktName);
 	for(int i =0; i < vectors.size(); i++){			//fault simulate all vectors
-		circuit = new gateLevelCkt(cktName);
+		//circuit = new gateLevelCkt(cktName);
 		
 		std::ofstream vec_file (vecName);
 		for(int j=0; j < vectors[i].size(); j++){
@@ -579,8 +580,8 @@ main(int argc, char *argv[])
     	fclose(detFile);
     	fclose(uflFile);
     	fclose(exFile);
-		delete circuit;
-		
+		//delete circuit;
+		circuit->clearFF(1);
 		//std::cout << "Press a number to continue.................\n";
 		//std::cin >> temp_i;		
 	}
@@ -2095,7 +2096,12 @@ int fIndex = fIndices[i];
 if (OUTPUT_DET)
 {
 	std::ofstream log ("log.txt", std::ios::app);
-	log << fGate[fIndex] << fGate[fIndex] << fStuck[fIndex] << "\r\n" ;
+	log << fGate[fIndex] ;
+	log << " ";
+	log << fGate[fIndex] ;
+	log << " ";
+	log << fStuck[fIndex]; 
+	log << "\r\n" ;
 	log.close();
 printf("%d %d %d;\n", fGate[fIndex], fIO[fIndex], fStuck[fIndex]);
 }
