@@ -89,7 +89,8 @@ std::vector<std::vector<int> > generate_random_test_sequence(int num_inputs, int
     double* probMaskTo1 = circuit->getProbMaskto1();
 	for (int i =0; i < num_vec; i++){
         for (int j=0; j < num_inputs; j++){
-        	//    RESET SIGNAL MASKING////////////////////////////////
+        	//  UNCOMMENT THIS CODE FOR RESET SIGNAL MASKING////////////////////////////////
+        	//  COMMENT THIS CODE TO REMOVE RESET SIGNAL MASKING //////////////////////////////
         	/*probTo0 = *(probMaskTo0 + j);
             probTo1 = *(probMaskTo1 + j);
             if(probTo0 > 0.5 || probTo1 > 0.5){
@@ -112,7 +113,8 @@ std::vector<std::vector<int> > generate_random_test_sequence(int num_inputs, int
 				a = rand()%2;
 			}*/
 			/////////////////////////////////////
-			 a = rand()%2;     //-------------------WITH NO RESET SIGNAL MASKING------------
+			 a = rand()%2;     ////COMMENT THIS IF YOU ARE IMPLEMENRTING RESET SIGNAL MASKING
+            						//uncomment this if you are running without reset signal masking
 			 //////////////////////////////////////////////////////////
             temp.push_back(a);
         }
@@ -135,6 +137,8 @@ char** generate_test_vector(int num_inputs, int num_vectors){
         for (int j = 0; j < num_inputs; j++)
         {
         	//-----------------------RESET SIGNAL MASKING-----------------------
+        	//  UNCOMMENT THIS CODE FOR RESET SIGNAL MASKING////////////////////////////////
+        	//  COMMENT THIS CODE TO REMOVE RESET SIGNAL MASKING //////////////////////////////
         	/*
         	probTo0 = *(probMaskTo0 + j);
             probTo1 = *(probMaskTo1 + j);
@@ -159,7 +163,8 @@ char** generate_test_vector(int num_inputs, int num_vectors){
 			}
             */
 			/////////////////////////////////////////////////////////////////////
-            a = rand()%2;
+            a = rand()%2;			//COMMENT THIS IF YOU ARE IMPLEMENRTING RESET SIGNAL MASKING
+            						//uncomment this if you are running without reset signal masking
             /////////////////////////////////////////////////////////////////////
             if(a == 0) test_vec[i][j] = '0'; else if( a ==1) test_vec[i][j] = '1';
         }

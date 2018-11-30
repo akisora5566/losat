@@ -952,6 +952,9 @@ gateLevelCkt::gateLevelCkt(char *cktName)
 
     totalNumFaults = numFaults;	// numFaults = number of faults left
     printf("\t%d total number of faults\n", totalNumFaults);
+    int cont;
+    std::cout << "Press any number to continue : ";
+    std::cin >> cont;
 
     setupfState();	// set up the fault list for faults with FF's
 
