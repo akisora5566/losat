@@ -68,7 +68,7 @@ using namespace std;
 // Global Variables
 char vectr[5120];
 gateLevelCkt *circuit;
-int OBSERVE, INIT0;
+int OBSERVE, INIT0, RESET_SIG;
 int vecNum=0;
 int numTieNodes;
 int TIES[512];
@@ -91,7 +91,7 @@ std::vector<std::vector<int> > generate_random_test_sequence(int num_inputs, int
         for (int j=0; j < num_inputs; j++){
         	//  UNCOMMENT THIS CODE FOR RESET SIGNAL MASKING////////////////////////////////
         	//  COMMENT THIS CODE TO REMOVE RESET SIGNAL MASKING //////////////////////////////
-        	/*probTo0 = *(probMaskTo0 + j);
+        	probTo0 = *(probMaskTo0 + j);
             probTo1 = *(probMaskTo1 + j);
             if(probTo0 > 0.5 || probTo1 > 0.5){
             	if(probTo0 > probTo1){
@@ -111,9 +111,9 @@ std::vector<std::vector<int> > generate_random_test_sequence(int num_inputs, int
 			}	
 			}else{
 				a = rand()%2;
-			}*/
+			}
 			/////////////////////////////////////
-			 a = rand()%2;     ////COMMENT THIS IF YOU ARE IMPLEMENRTING RESET SIGNAL MASKING
+			 //a = rand()%2;     ////COMMENT THIS IF YOU ARE IMPLEMENRTING RESET SIGNAL MASKING
             						//uncomment this if you are running without reset signal masking
 			 //////////////////////////////////////////////////////////
             temp.push_back(a);
@@ -139,7 +139,7 @@ char** generate_test_vector(int num_inputs, int num_vectors){
         	//-----------------------RESET SIGNAL MASKING-----------------------
         	//  UNCOMMENT THIS CODE FOR RESET SIGNAL MASKING////////////////////////////////
         	//  COMMENT THIS CODE TO REMOVE RESET SIGNAL MASKING //////////////////////////////
-        	/*
+        	
         	probTo0 = *(probMaskTo0 + j);
             probTo1 = *(probMaskTo1 + j);
             if(probTo0 > 0.4 || probTo1 > 0.4){
@@ -161,9 +161,9 @@ char** generate_test_vector(int num_inputs, int num_vectors){
 			}else{
 				a = rand()%2;
 			}
-            */
+            
 			/////////////////////////////////////////////////////////////////////
-            a = rand()%2;			//COMMENT THIS IF YOU ARE IMPLEMENRTING RESET SIGNAL MASKING
+            //a = rand()%2;			//COMMENT THIS IF YOU ARE IMPLEMENRTING RESET SIGNAL MASKING
             						//uncomment this if you are running without reset signal masking
             /////////////////////////////////////////////////////////////////////
             if(a == 0) test_vec[i][j] = '0'; else if( a ==1) test_vec[i][j] = '1';
@@ -171,6 +171,8 @@ char** generate_test_vector(int num_inputs, int num_vectors){
     }
     return test_vec;
 }
+
+
 
 std::vector< float> compute_fitness(std::vector< std::vector< std::vector <int> > > curr_population, int num_vectors){
 	std::vector< float> fitness;
@@ -275,9 +277,9 @@ std::vector< float> compute_fitness(std::vector< std::vector< std::vector <int> 
         	}
         
         	//cout << i << "after compute fitness\t";
-        	cout << "Fitness of input vector " << i << " is " << f <<"\n";
+        	//cout << "Fitness of input vector " << i << " is " << f <<"\n";
     	}
-    	//cout << "Fitness of input vector " << i << " is " << f <<"\n";
+    	cout << "Fitness of input vector " << i << " is " << f <<"\n";
 		curr_state_0.clear(); curr_state_1.clear(); curr_state_2.clear();
         curr_state_3.clear(); curr_state_4.clear(); states.clear();
 
@@ -356,7 +358,7 @@ void partition(int num_vectors){
 	unsigned int* value1ffs;
     unsigned int* value2ffs;
     char** test_vec;
-	for(int count =0; count < 500; count++){
+	for(int count =0; count < 2000; count++){
     	test_vec = generate_test_vector(circuit->numpri, num_vectors);
         //start = clock();
         circuit->setTieEvents();
@@ -368,16 +370,19 @@ void partition(int num_vectors){
 		//circuit->reset();
 
         for(int i=0; i < circuit->numff; i++){
-            if(value1ffs[i] == 0 && value2ffs[i] == 0){
-                count_zero_ffs[i]++;
-            }else if(value1ffs[i] == 1 && value2ffs[i] == 1){
-                count_one_ffs[i]++;
-            }
+        	if(*value1ffs == *value2ffs){
+        		if(*value1ffs == 0){
+        			count_zero_ffs[i]++;//states.push_back('0');//cout <<"0";
+				}else{
+        			count_one_ffs[i]++;//states.push_back('1');//cout <<"1";
+				} 
+			}
+			value1ffs++;	value2ffs++;
         }
     }	
 
 	for(int i = 0; i < circuit->numff; i++){
-        ff_bias.push_back(abs(count_one_ffs[i] - count_zero_ffs[i])/500);
+        ff_bias.push_back(abs(count_one_ffs[i] - count_zero_ffs[i])/(count_one_ffs[i] + count_zero_ffs[i]));
 
         if(ff_bias[i] <= 0.2){
             state_partition.push_back(0);
@@ -471,7 +476,7 @@ int main(int argc, char *argv[])
     char** test_vec;
     clock_t start, end;
 
-    int num_vectors = 10;
+    int num_vectors = 20;
 
     if ((argc != 2) && (argc != 3))
     {
@@ -552,7 +557,7 @@ int main(int argc, char *argv[])
 	partition(num_vectors);
 	cout << "CONTROLLABILITY BASED PARTITIONING COMPLETE...\n\n";
     std::vector< std::vector < std::vector < int> > > test_seq_population, curr_population, next_population;
-    for( int times =0; times < 10; times++){
+    for( int times =0; times < 5; times++){
     	cout << "\n ****************************************  TIMES  =" << times+1 << "*******************************************\n";
         //Create a current population of 1000 vectors
         for( int a = 0; a<500; a++) curr_population.push_back(generate_random_test_sequence(num_inputs, num_vectors));
@@ -562,7 +567,7 @@ int main(int argc, char *argv[])
         cout<< "Computing Fitness...\n\n";
         fitness = compute_fitness(curr_population, num_vectors);
         cout<< "Fitness Computed...\n\n";
-		for( int gen_num = 0; gen_num < 50 ; gen_num++){
+		for( int gen_num = 0; gen_num < 500 ; gen_num++){
         	cout << "\nGENERATION NUMBER "<< gen_num +1;
             //Getting test sequence with best fitness
             cout << "\n\tChoose maximum fitness element...\n";
