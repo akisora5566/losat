@@ -765,7 +765,7 @@ void gateLevelCkt::goodsim()
                                     val1 = 0;
                                     val2 = 0;
                                     id_temp = 0;
-                                    //cout << "Xs from PI squashed on gate " << gateN << "!\n";
+                                    //cout << "Xs from PI squashed on AND gate " << gateN << "!\n";
                                     evaluated = true;
                                 }
                             }
@@ -854,7 +854,7 @@ void gateLevelCkt::goodsim()
                                     val1 = ALLONES;
                                     val2 = ALLONES;
                                     id_temp = 0;
-                                    //cout << "Xs from PI squashed on gate " << gateN << "!\n";
+                                    //cout << "Xs from PI squashed on NAND gate " << gateN << "!\n";
                                     evaluated = true;
                                 }
                             }
@@ -940,7 +940,7 @@ void gateLevelCkt::goodsim()
                                     val1 = 1;
                                     val2 = 1;
                                     id_temp = 0;
-                                    //cout << "Xs from PI squashed on gate " << gateN << "!\n";
+                                    //cout << "Xs from PI squashed on OR gate " << gateN << "!\n";
                                     evaluated = true;
                                 }
                             }
@@ -1003,7 +1003,6 @@ void gateLevelCkt::goodsim()
                 for (i = 0; i < fanin_count; i++)
                 {
                     predecessor = inlist[gateN][i];
-                    //printGateValue(predecessor);
                     for (j = i+1; j < fanin_count; j++)
                     {
                         predecessor2 = inlist[gateN][j];
@@ -1017,7 +1016,7 @@ void gateLevelCkt::goodsim()
                                     val1 = 0;
                                     val2 = 0;
                                     id_temp = 0;
-                                    //cout << "Xs from PI squashed on gate " << gateN << "!\n";
+                                    //cout << "Xs from PI squashed on NOR gate " << gateN << "!\n";
                                     evaluated = true;
                                 }
                             }
@@ -1154,7 +1153,7 @@ void gateLevelCkt::goodsim()
                 break;
             case T_xor:
                 predList = inlist[gateN];
-                // if two predecessors has different id => generate a new unknown
+                // if two predecessors has different id(> 0) => generate a new unknown
                 for (i = 0; i < fanin_count; i++)
                 {
                     for (j = i+1; j < fanin_count; j++)
@@ -1195,10 +1194,20 @@ void gateLevelCkt::goodsim()
 
                 if ((xi_count + xi_bar_count) == 0)
                 {
-                    // no x => evaluate normally
+                    // no real x
                     for(i = 1; i < fanin[gateN]; i++)
                     {
                         predecessor = predList[i];
+                        if (value1[predecessor] != value2[predecessor]) {
+                            // initial unknown existed => nex x
+                            val1 = 0;
+                            val2 = ALLONES;
+                            id_unknown_max++;
+                            id_temp = id_unknown_max;
+                            break;
+                        }
+
+                        // only 0 or 1, evaluate normally
                         val1 = val1 ^ value1[predecessor];
                         val2 = val2 ^ value2[predecessor];
                         id_temp = 0;
@@ -1217,7 +1226,7 @@ void gateLevelCkt::goodsim()
                 else if (!(xi_count%2) && !(xi_bar_count%2))
                 {
                     // xi and xi_bar are both even => squashed, 0
-                    //cout << "Xs from PI squashed on gate " << gateN << "!\n";
+                    //cout << "Xs from PI squashed on XOR gate " << gateN << "!\n";
                     val1 = 0;
                     val2 = 0;
                     id_temp = 0;
@@ -1226,7 +1235,7 @@ void gateLevelCkt::goodsim()
                 else if ((xi_count%2) && (xi_bar_count%2))
                 {
                     // xi and xi_bar are both odd => squashed, 1
-                    //cout << "Xs from PI squashed on gate " << gateN << "!\n";
+                    //cout << "Xs from PI squashed on XOR gate " << gateN << "!\n";
                     val1 = ALLONES;
                     val2 = ALLONES;
                     id_temp = 0;
@@ -1235,8 +1244,8 @@ void gateLevelCkt::goodsim()
                 else if (!(xi_count%2) && (xi_bar_count%2))
                 {
                     // xi even, xi_bar odd => x_bar, same id
-                    val1 = 0;
-                    val2 = ALLONES;
+                    val1 = ALLONES;
+                    val2 = 0;
                     id_temp = one_of_the_id_unknown;
                     break;
                 }
@@ -1293,10 +1302,19 @@ void gateLevelCkt::goodsim()
 
                 if ((xi_count + xi_bar_count) == 0)
                 {
-                    // no x => evaluate normally
+                    // no real x
                     for(i = 1; i < fanin[gateN]; i++)
                     {
                         predecessor = predList[i];
+                        if (value1[predecessor] != value2[predecessor]) {
+                            // initial unknown existed => nex x
+                            val1 = 0;
+                            val2 = ALLONES;
+                            id_unknown_max++;
+                            id_temp = id_unknown_max;
+                            break;
+                        }
+
                         val1 = val1 ^ value1[predecessor];
                         val2 = val2 ^ value2[predecessor];
                         id_temp = 0;
@@ -1310,7 +1328,7 @@ void gateLevelCkt::goodsim()
                 else if (!(xi_count%2) && !(xi_bar_count%2))
                 {
                     // xi and xi_bar are both even => squashed, 1
-                    //cout << "Xs from PI squashed on gate " << gateN << "!\n";
+                    //cout << "Xs from PI squashed on XNOR gate " << gateN << "!\n";
                     val1 = ALLONES;
                     val2 = ALLONES;
                     id_temp = 0;
@@ -1327,15 +1345,15 @@ void gateLevelCkt::goodsim()
                 }
                 else if (!(xi_count%2) && (xi_bar_count%2))
                 {
-                    // xi even, xi_bar odd => x, same id
-                    val1 = ALLONES;
-                    val2 = 0;
+                    // xi even, xi_bar odd => xi, same id
+                    val1 = 0;
+                    val2 = ALLONES;
                     id_temp = one_of_the_id_unknown;
                     break;
                 }
                 else if ((xi_count%2) && !(xi_bar_count%2))
                 {
-                    // xi odd, xi_bar even => x_bar, same id
+                    // xi odd, xi_bar even => xi_bar, same id
                     val1 = ALLONES;
                     val2 = 0;
                     id_temp = one_of_the_id_unknown;
@@ -1402,7 +1420,7 @@ void gateLevelCkt::goodsim()
     }	// while (currLevel...)
 
 
-    /******** old FF handle function by Dr. Hsiao********/
+    /******** old FF handling function by Dr. Hsiao********/
     /************** temporarily blocked******************/
     // now re-insert the activation list for the FF's
     /*
@@ -1429,24 +1447,13 @@ void gateLevelCkt::goodsim()
 ////////////////////////////////////////////////////////////////////////
 void gateLevelCkt::LogicSim(char** input_vectors, int timeframes)
 {
-    //cout << "sizeof(input_vectors) = " << sizeof(input_vectors) << endl;
-    //cout << "sizeof(input_vectors[0]) = " << sizeof(input_vectors[0]) << endl;
-    //int timeframes = sizeof(input_vectors);
-    //cout << "timeframes =" << timeframes << endl;
-
     for (int i = 0; i < timeframes; i++)
     {
-        //cout << "vector for timeframe #" << i << ": " << input_vectors[i] << endl;
         applyFF();
-        //cout << "applyFF succeeded" << endl;
         applyVector(input_vectors[i]);
-        //cout << "applyVector succeeded" << endl;
         goodsim();
-        //cout << "goodsim succeeded" << endl;
-        observeFFs();
-        observeOutputs();
-
-
+        //observeFFs();
+        //observeOutputs();
     }
 }
 
@@ -1459,19 +1466,19 @@ void gateLevelCkt::LogicSim(char** input_vectors, int timeframes)
 
 void gateLevelCkt::observeOutputs()
 {
-    /*int i;
+    int i;
 
     cout << "Outs:\t";
     for (i=0; i<numout; i++)
     {
-	if (value1[outputs[i]] && value2[outputs[i]])
-	    cout << "1";
-	else if ((value1[outputs[i]] == 0) && (value2[outputs[i]] == 0))
-	    cout << "0";
-	else
-	    cout << "X";
+	    if (value1[outputs[i]] && value2[outputs[i]])
+	        cout << "1";
+	    else if ((value1[outputs[i]] == 0) && (value2[outputs[i]] == 0))
+	        cout << "0";
+	    else
+	        cout << "X";
     }
-    cout << endl;*/
+    cout << endl;
 }
 
 
@@ -1482,7 +1489,7 @@ void gateLevelCkt::observeOutputs()
 
 void gateLevelCkt::observeFFs()
 {
-    /*int i;
+    int i;
     cout << "FFs:\t";
     for (i=0; i<numff; i++)
     {
@@ -1493,7 +1500,7 @@ void gateLevelCkt::observeFFs()
         else
             cout << "X";
     }
-    cout << endl;*/
+    cout << endl;
 
 }
 
@@ -1505,7 +1512,7 @@ void gateLevelCkt::observeFFs()
 
 void gateLevelCkt::printGateValue(int gateN)
 {
-    /*
+
 	unsigned int val1 = value1[gateN];
     unsigned int val2 = value2[gateN];
     int id = id_unknown[gateN];
@@ -1522,7 +1529,7 @@ void gateLevelCkt::printGateValue(int gateN)
     {
         cout << "gate[" << gateN << "] output unknown, id = " << id << endl;
     }
-    */
+
 
 }
 
